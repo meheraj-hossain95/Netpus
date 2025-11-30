@@ -1,0 +1,11 @@
+{
+  "name": "netpus-frontend",
+  "version": "1.0.0",
+  "description": "Netpus Network Monitor Frontend",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "echo Dev mode"
+  },
+  "author": "Netpus",
+  "license": "MIT"
+}

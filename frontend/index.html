@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netpus</title>
+    <link rel="stylesheet" href="src/style.css">
+</head>
+
+<body>
+    <div id="app">
+        <div class="app-header">
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-page="dashboard">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="margin-right: 8px; vertical-align: -3px;">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    Dashboard
+                </button>
+                <button class="nav-tab" data-page="usage">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="margin-right: 8px; vertical-align: -3px;">
+                        <path d="M3 3v18h18"></path>
+                        <path d="m19 9-5 5-4-4-3 3"></path>
+                    </svg>
+                    Usage History
+                </button>
+                <button class="nav-tab" data-page="settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="margin-right: 8px; vertical-align: -3px;">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83">
+                        </path>
+                    </svg>
+                    Settings
+                </button>
+            </nav>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div id="dashboard-page" class="page active">
+            <div class="page-header">
+                <div class="stats-summary">
+                    <div class="stat-card today-card">
+                        <div class="stat-card-header">
+                            <h3>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right: 10px; vertical-align: -3px; opacity: 0.7;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                Today's Usage
+                            </h3>
+                            <div class="controls">
+                                <button id="pauseBtn" class="btn-icon" title="Pause Monitoring">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+                                        <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+                                    </svg>
+                                </button>
+                                <button id="resumeBtn" class="btn-icon" style="display: none;"
+                                    title="Resume Monitoring">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-item">
+                                <div class="stat-label">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"
+                                        style="margin-right: 5px; vertical-align: -1px; opacity: 0.8;">
+                                        <path d="M12 4l-8 8h5v8h6v-8h5z"></path>
+                                    </svg>
+                                    Upload
+                                </div>
+                                <div class="stat-value upload" id="todayUpload">0 B</div>
+                            </div>
+                            <div class="stat-divider"></div>
+                            <div class="stat-item">
+                                <div class="stat-label">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"
+                                        style="margin-right: 5px; vertical-align: -1px; opacity: 0.8;">
+                                        <path d="M12 20l8-8h-5V4H9v8H4z"></path>
+                                    </svg>
+                                    Download
+                                </div>
+                                <div class="stat-value download" id="todayDownload">0 B</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table id="statsTable">
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th class="sortable" data-column="uploadSpeed">
+                                Upload Speed
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-column="downloadSpeed">
+                                Download Speed
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-column="totalUpload">
+                                Total Upload
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-column="totalDownload">
+                                Total Download
+                                <span class="sort-indicator"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsBody">
+                        <tr>
+                            <td colspan="5" class="no-data">No active network connections</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Network Usage Page -->
+        <div id="usage-page" class="page">
+            <div class="page-header">
+                <div class="search-wrapper">
+                    <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="M21 21l-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Search applications...">
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table id="usageTable">
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th class="sortable" data-column="totalUpload">
+                                Total Upload
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-column="totalDownload">
+                                Total Download
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-column="totalData">
+                                Total Data
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-column="lastSeen">
+                                Last Seen
+                                <span class="sort-indicator"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="usageBody">
+                        <tr>
+                            <td colspan="5" class="no-data">No usage data available</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div id="settings-page" class="page">
+            <div class="settings-container">
+                <div class="setting-section">
+                    <div class="setting-group">
+                        <div class="setting-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            <h3>General</h3>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <label>Auto-start on boot</label>
+                                <span class="setting-description">Launch application when system starts</span>
+                            </div>
+                            <input type="checkbox" id="autoStartCheck" class="toggle-switch">
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
+                        <div class="setting-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="6"></circle>
+                                <circle cx="12" cy="12" r="2"></circle>
+                            </svg>
+                            <h3>Appearance</h3>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <label>Theme</label>
+                                <span class="setting-description">Choose your preferred color scheme</span>
+                            </div>
+                            <select id="themeSelect" class="select-modern">
+                                <option value="auto">Auto (System)</option>
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
+                        <div class="setting-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 2v20"></path>
+                                <path d="m17 7-5 5-5-5"></path>
+                                <path d="m17 12-5 5-5-5"></path>
+                            </svg>
+                            <h3>Data Retention</h3>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <label>Keep data for</label>
+                                <span class="setting-description">Automatically delete older records</span>
+                            </div>
+                            <select id="retentionSelect" class="select-modern">
+                                <option value="-2">Do not save</option>
+                                <option value="0">1 minute (Testing)</option>
+                                <option value="7">7 days</option>
+                                <option value="30">30 days (Default)</option>
+                                <option value="90">90 days</option>
+                                <option value="-1">Forever</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
+                        <div class="setting-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                <path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"></path>
+                            </svg>
+                            <h3>Database</h3>
+                        </div>
+                        <div class="db-stats">
+                            <div class="db-stat-item">
+                                <span class="db-stat-label">Size</span>
+                                <span class="db-stat-value" id="dbSize">0 B</span>
+                            </div>
+                            <div class="db-stat-item">
+                                <span class="db-stat-label">Records</span>
+                                <span class="db-stat-value" id="dbRecords">0</span>
+                            </div>
+                            <div class="db-stat-item">
+                                <span class="db-stat-label">Oldest Record</span>
+                                <span class="db-stat-value" id="dbOldest">Never</span>
+                            </div>
+                        </div>
+                        <button id="cleanupBtn" class="btn-secondary">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 8px; vertical-align: -2px;">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                </path>
+                            </svg>
+                            Clear Old Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="wailsjs/runtime/runtime.js"></script>
+    <script src="wailsjs/go/main/App.js"></script>
+    <script src="src/main.js"></script>
+</body>
+
+</html>

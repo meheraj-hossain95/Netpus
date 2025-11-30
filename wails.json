@@ -1,0 +1,21 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "netpus",
+  "outputfilename": "netpus",
+  "frontend:install": "",
+  "frontend:build": "node build.js",
+  "author": {
+    "name": "Netpus",
+    "email": "dev@netpus.local"
+  },
+  "info": {
+    "companyName": "Netpus",
+    "productName": "Netpus Network Monitor",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2025",
+    "comments": "Real-time network bandwidth monitoring application"
+  },
+  "wailsjsdir": "./frontend/wailsjs",
+  "version": "2",
+  "outputType": "desktop"
+}
