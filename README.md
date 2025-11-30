@@ -7,7 +7,7 @@ A lightweight, real-time network bandwidth monitor for Windows.
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Netpus Dashboard" width="800">
+  <img src="build/appicon.png" alt="Netpus Dashboard" width="400">
 </p>
 
 ## ✨ Features
@@ -27,21 +27,21 @@ A lightweight, real-time network bandwidth monitor for Windows.
 Real-time network monitoring with live upload/download speeds for each application.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="700">
+  <img src="Dashboard.png" alt="Dashboard" width="800">
 </p>
 
 ### History
 Track your bandwidth usage over time with detailed historical data and trends.
 
 <p align="center">
-  <img src="docs/screenshots/history.png" alt="History" width="700">
+  <img src="History.png" alt="History" width="800">
 </p>
 
 ### Settings
 Customize theme, data retention, auto-start behavior, and more.
 
 <p align="center">
-  <img src="docs/screenshots/settings.png" alt="Settings" width="700">
+  <img src="Setting.png" alt="Settings" width="800">
 </p>
 
 ---
