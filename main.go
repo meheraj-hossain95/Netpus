@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -27,6 +29,58 @@ var (
 )
 
 const version = "1.0.0"
+
+// Windows API for mutex
+var (
+	kernel32      = syscall.NewLazyDLL("kernel32.dll")
+	user32        = syscall.NewLazyDLL("user32.dll")
+	createMutexW  = kernel32.NewProc("CreateMutexW")
+	getLastError  = kernel32.NewProc("GetLastError")
+	findWindowW   = user32.NewProc("FindWindowW")
+	showWindow    = user32.NewProc("ShowWindow")
+	setForeground = user32.NewProc("SetForegroundWindow")
+	postMessageW  = user32.NewProc("PostMessageW")
+)
+
+const (
+	ERROR_ALREADY_EXISTS = 183
+	SW_RESTORE           = 9
+	SW_SHOW              = 5
+	WM_USER              = 0x0400
+	WM_SHOWWINDOW_CUSTOM = WM_USER + 100
+)
+
+// checkSingleInstance returns true if this is the first instance
+func checkSingleInstance() bool {
+	mutexName, _ := syscall.UTF16PtrFromString("Global\\NetpusNetworkMonitor")
+
+	ret, _, _ := createMutexW.Call(0, 0, uintptr(unsafe.Pointer(mutexName)))
+	if ret == 0 {
+		return true // Failed to create mutex, assume first instance
+	}
+
+	lastErr, _, _ := getLastError.Call()
+	if lastErr == ERROR_ALREADY_EXISTS {
+		// Another instance exists - try to show its window
+		bringExistingToFront()
+		return false
+	}
+
+	return true
+}
+
+// bringExistingToFront finds and shows the existing Netpus window
+func bringExistingToFront() {
+	// Try to find the Netpus window by title
+	windowTitle, _ := syscall.UTF16PtrFromString("Netpus Network Monitor")
+	hwnd, _, _ := findWindowW.Call(0, uintptr(unsafe.Pointer(windowTitle)))
+
+	if hwnd != 0 {
+		showWindow.Call(hwnd, SW_RESTORE)
+		showWindow.Call(hwnd, SW_SHOW)
+		setForeground.Call(hwnd)
+	}
+}
 
 func main() {
 	flag.Parse()
@@ -58,28 +112,20 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Check for multiple instances using lock file
+	// Check for single instance using Windows mutex
+	if !checkSingleInstance() {
+		// Another instance is running, we tried to bring it to front
+		fmt.Println("Netpus is already running. Bringing existing window to front.")
+		os.Exit(0)
+	}
+
+	// Also use lock file as backup
 	lockPath := filepath.Join(os.TempDir(), "netpus.lock")
-	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		if os.IsExist(err) {
-			// Lock file exists, check if process is actually running
-			if data, readErr := os.ReadFile(lockPath); readErr == nil {
-				fmt.Printf("Netpus is already running (PID: %s)\n", string(data))
-				fmt.Println("Only one instance of Netpus can run at a time.")
-				os.Exit(1)
-			}
-		}
-		log.Printf("Warning: Could not create lock file: %v", err)
-	} else {
-		// Write our PID to lock file
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err == nil {
 		fmt.Fprintf(lockFile, "%d", os.Getpid())
 		lockFile.Close()
-
-		// Clean up lock file on exit
-		defer func() {
-			os.Remove(lockPath)
-		}()
+		defer os.Remove(lockPath)
 	}
 
 	// Create an instance of the app structure
