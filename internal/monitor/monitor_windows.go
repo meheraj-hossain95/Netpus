@@ -5,6 +5,7 @@ package monitor
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -18,6 +19,14 @@ var (
 	procGetIfTable2         = iphlpapi.NewProc("GetIfTable2")
 )
 
+// Track previous system I/O for delta calculation
+var (
+	prevSystemUpload   int64
+	prevSystemDownload int64
+	prevSystemMux      sync.Mutex
+	systemInitialized  bool
+)
+
 type processData struct {
 	processID     int
 	uploadBytes   int64
@@ -25,11 +34,47 @@ type processData struct {
 }
 
 // getNetworkProcesses collects network statistics for all processes on Windows
+// This now returns DELTA bytes (bytes transferred since last call) distributed to processes
 func getNetworkProcesses() (map[string]processData, error) {
-	// Get system-wide network I/O
+	// Get system-wide network I/O (cumulative totals)
 	totalUpload, totalDownload, err := getSystemNetworkIO()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system network I/O: %w", err)
+	}
+
+	prevSystemMux.Lock()
+	defer prevSystemMux.Unlock()
+
+	// Calculate system-wide deltas
+	var uploadDelta, downloadDelta int64
+
+	if !systemInitialized {
+		// First call - initialize baseline, return zero
+		prevSystemUpload = totalUpload
+		prevSystemDownload = totalDownload
+		systemInitialized = true
+		return make(map[string]processData), nil
+	}
+
+	// Calculate deltas since last call
+	uploadDelta = totalUpload - prevSystemUpload
+	downloadDelta = totalDownload - prevSystemDownload
+
+	// Handle counter resets (e.g., after system restart or overflow)
+	if uploadDelta < 0 {
+		uploadDelta = 0
+	}
+	if downloadDelta < 0 {
+		downloadDelta = 0
+	}
+
+	// Update previous values
+	prevSystemUpload = totalUpload
+	prevSystemDownload = totalDownload
+
+	// If no traffic, return empty
+	if uploadDelta == 0 && downloadDelta == 0 {
+		return make(map[string]processData), nil
 	}
 
 	// Get connection information
@@ -44,16 +89,17 @@ func getNetworkProcesses() (map[string]processData, error) {
 	}
 
 	// Build process connection map with weights
+	// Only count ESTABLISHED TCP connections (actually transferring data)
 	processWeights := make(map[uint32]float64)
 	processNames := make(map[uint32]string)
 	var totalWeight float64
 
-	// TCP connections (higher weight)
+	// TCP connections - only ESTABLISHED connections are likely transferring data
 	for _, conn := range tcpConns {
+		if conn.State != 5 { // Only ESTABLISHED
+			continue
+		}
 		weight := 1.0
-		if conn.State == 5 { // ESTABLISHED
-			weight = 10.0
-		}
 		processWeights[conn.OwningPid] += weight
 		totalWeight += weight
 
@@ -64,9 +110,9 @@ func getNetworkProcesses() (map[string]processData, error) {
 		}
 	}
 
-	// UDP connections (lower weight)
+	// UDP connections (listening sockets that may be receiving data)
 	for _, conn := range udpConns {
-		weight := 0.5
+		weight := 0.3 // Lower weight for UDP
 		processWeights[conn.OwningPid] += weight
 		totalWeight += weight
 
@@ -77,7 +123,7 @@ func getNetworkProcesses() (map[string]processData, error) {
 		}
 	}
 
-	// Distribute network bytes based on weights
+	// Distribute the DELTA bytes based on weights
 	result := make(map[string]processData)
 
 	if totalWeight > 0 {
@@ -88,13 +134,16 @@ func getNetworkProcesses() (map[string]processData, error) {
 			}
 
 			proportion := weight / totalWeight
-			upload := int64(float64(totalUpload) * proportion)
-			download := int64(float64(totalDownload) * proportion)
+			upload := int64(float64(uploadDelta) * proportion)
+			download := int64(float64(downloadDelta) * proportion)
 
-			result[name] = processData{
-				processID:     int(pid),
-				uploadBytes:   upload,
-				downloadBytes: download,
+			// Only add if there's actual traffic
+			if upload > 0 || download > 0 {
+				result[name] = processData{
+					processID:     int(pid),
+					uploadBytes:   upload,
+					downloadBytes: download,
+				}
 			}
 		}
 	}

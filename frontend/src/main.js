@@ -92,7 +92,7 @@ function switchPage(page) {
 // Start real-time data updates
 function startDataUpdates() {
     updateDashboard();
-    setInterval(updateDashboard, 1000); // Update every second
+    setInterval(updateDashboard, 500); // Update every 500ms for responsive real-time display
 }
 
 // Update dashboard with real-time stats

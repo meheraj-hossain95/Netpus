@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	UPDATE_INTERVAL   = 1 * time.Second  // Fixed 1-second collection interval for real-time UI updates
-	BATCH_INTERVAL    = 10 * time.Second // Database write interval (zero data loss)
-	CLEANUP_THRESHOLD = 5 * time.Second  // Inactive process cleanup time (5-second timeout)
+	UPDATE_INTERVAL   = 500 * time.Millisecond // Fast 500ms collection for responsive real-time UI
+	BATCH_INTERVAL    = 10 * time.Second       // Database write interval (zero data loss)
+	CLEANUP_THRESHOLD = 3 * time.Second        // Inactive process cleanup time (3-second timeout)
 )
 
 // NetworkStat represents network statistics for a single application
@@ -24,13 +24,6 @@ type NetworkStat struct {
 	TotalUpload   int64 // Total bytes uploaded
 	TotalDownload int64 // Total bytes downloaded
 	LastUpdate    time.Time
-}
-
-// processNetStats tracks internal statistics for speed calculation
-type processNetStats struct {
-	uploadBytes   int64
-	downloadBytes int64
-	lastUpdate    time.Time
 }
 
 // MonitorStatus represents the current monitor state
@@ -47,7 +40,6 @@ type Monitor struct {
 	cancel      context.CancelFunc
 	db          interface{}
 	stats       map[string]*NetworkStat
-	prevStats   map[string]*processNetStats
 	statsMux    sync.RWMutex
 	batch       []batchRecord
 	batchMux    sync.Mutex
@@ -73,7 +65,6 @@ func New(db interface{}) *Monitor {
 	return &Monitor{
 		db:          db,
 		stats:       make(map[string]*NetworkStat),
-		prevStats:   make(map[string]*processNetStats),
 		batch:       make([]batchRecord, 0),
 		saveEnabled: true,
 	}
@@ -158,6 +149,8 @@ func (m *Monitor) collect() error {
 	m.pauseMux.RUnlock()
 
 	// Get network data from platform-specific implementation
+	// NOTE: getNetworkProcesses() now returns DELTA bytes (bytes transferred since last call)
+	// distributed proportionally to processes with active connections
 	processes, err := getNetworkProcesses()
 	if err != nil {
 		return err
@@ -167,40 +160,18 @@ func (m *Monitor) collect() error {
 	m.statsMux.Lock()
 	defer m.statsMux.Unlock()
 
+	// Update stats with delta values directly
 	for appName, data := range processes {
-		prev, exists := m.prevStats[appName]
+		// data.uploadBytes and data.downloadBytes are already deltas
+		uploadDelta := data.uploadBytes
+		downloadDelta := data.downloadBytes
 
-		if !exists {
-			// First time seeing this process
-			m.prevStats[appName] = &processNetStats{
-				uploadBytes:   data.uploadBytes,
-				downloadBytes: data.downloadBytes,
-				lastUpdate:    now,
-			}
+		// Skip if no activity
+		if uploadDelta == 0 && downloadDelta == 0 {
 			continue
 		}
 
-		// Calculate deltas
-		timeDelta := now.Sub(prev.lastUpdate).Seconds()
-		if timeDelta <= 0 {
-			continue
-		}
-
-		uploadDelta := data.uploadBytes - prev.uploadBytes
-		downloadDelta := data.downloadBytes - prev.downloadBytes
-
-		if uploadDelta < 0 {
-			uploadDelta = data.uploadBytes
-		}
-		if downloadDelta < 0 {
-			downloadDelta = data.downloadBytes
-		}
-
-		// Calculate speeds
-		uploadSpeed := int64(float64(uploadDelta) / timeDelta)
-		downloadSpeed := int64(float64(downloadDelta) / timeDelta)
-
-		// Update or create stat
+		// Get or create stat entry
 		stat, exists := m.stats[appName]
 		if !exists {
 			stat = &NetworkStat{
@@ -210,35 +181,43 @@ func (m *Monitor) collect() error {
 			m.stats[appName] = stat
 		}
 
-		stat.UploadSpeed = uploadSpeed
-		stat.DownloadSpeed = downloadSpeed
+		// Calculate time delta for speed calculation
+		timeDelta := 1.0 // Default 1 second
+		if !stat.LastUpdate.IsZero() {
+			timeDelta = now.Sub(stat.LastUpdate).Seconds()
+			if timeDelta <= 0 {
+				timeDelta = 1.0
+			}
+		}
+
+		// Calculate speeds (bytes per second)
+		stat.UploadSpeed = int64(float64(uploadDelta) / timeDelta)
+		stat.DownloadSpeed = int64(float64(downloadDelta) / timeDelta)
 		stat.TotalUpload += uploadDelta
 		stat.TotalDownload += downloadDelta
 		stat.LastUpdate = now
 
-		// Add to batch if there's activity
-		if uploadDelta > 0 || downloadDelta > 0 {
-			m.batchMux.Lock()
+		// Add to batch for database storage
+		m.batchMux.Lock()
+		expiresAt := now.Add(24 * time.Hour).Unix()
+		m.batch = append(m.batch, batchRecord{
+			appName:     appName,
+			processID:   data.processID,
+			upload:      uploadDelta,
+			download:    downloadDelta,
+			timestamp:   now.Unix(),
+			isTemporary: false,
+			expiresAt:   expiresAt,
+		})
+		m.batchMux.Unlock()
+	}
 
-			// Set expiration time (24 hours from now)
-			expiresAt := now.Add(24 * time.Hour).Unix()
-
-			m.batch = append(m.batch, batchRecord{
-				appName:     appName,
-				processID:   data.processID,
-				upload:      uploadDelta,
-				download:    downloadDelta,
-				timestamp:   now.Unix(),
-				isTemporary: false, // Permanent record
-				expiresAt:   expiresAt,
-			})
-			m.batchMux.Unlock()
+	// Reset speeds for apps that didn't have activity this cycle
+	for appName, stat := range m.stats {
+		if _, hasActivity := processes[appName]; !hasActivity {
+			stat.UploadSpeed = 0
+			stat.DownloadSpeed = 0
 		}
-
-		// Update previous stats
-		prev.uploadBytes = data.uploadBytes
-		prev.downloadBytes = data.downloadBytes
-		prev.lastUpdate = now
 	}
 
 	m.lastUpdate = now
@@ -350,7 +329,6 @@ func (m *Monitor) cleanupInactive() {
 	for appName, stat := range m.stats {
 		if now.Sub(stat.LastUpdate) > CLEANUP_THRESHOLD {
 			delete(m.stats, appName)
-			delete(m.prevStats, appName)
 		}
 	}
 }
